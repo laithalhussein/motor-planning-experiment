@@ -1,0 +1,174 @@
+load('st_bln_data');              qoDat=st_bln_data'; qo = stats2(qoDat);    % st_bln_data = expt 2b no-obstacle data: 6x8  cell all 1TTs (Nsubjects x [Left_test_epoch, Right, Center, Left_baseline, Right, Center])' ])'
+load('st_bln_data_exp2a'); qaoDat=st_bln_data_exp2a'; qao = stats2(qaoDat);  % st_bln_data_exp2a = expt 2b no-obstacle data: 6x26 cell all 1TTs (Nsubjects x [Left_test_epoch, Right, Center, Left_baseline, Right, Center])' ])'
+load('sm_data');         qDat=sm_data';         q = stats2(qDat);          % sm_data = expt 2b obstacle data:  4x26 cell (Nsubjects x [1TT-leftObstacle,1TT-right, 2TT-left, 2TT-right])'
+load('exp2a_sm_data');   qaDat=exp2a_sm_data';  qa = stats2(qaDat);  % exp2a_sm_data = expt 2a obstacle data:  4x8 c ell (Nsubjects x [1TT-leftObstacle,1TT-right, 2TT-left, 2TT-right])'
+
+% Group-avg modeling:
+
+% rename variables of interests
+modb.N = size(q.M,1);
+moda.N = size(qa.M,1);
+modb.ob = mean(q.M1(:,1));
+moda.ob = mean(qa.M1(:,1));
+modb.no_ob = mean(qo.M1(:,1))-30;
+moda.no_ob = mean(qao.M1(:,1))-30;
+modb.Y_ =  q.M1(:,2);
+moda.Y_ =  qa.M1(:,2);
+modb.Y =  mean(modb.Y_);
+moda.Y =  mean(moda.Y_);
+
+% make baseline 1:1 models w/ equal weighting
+modb.MA = 0.5*modb.no_ob + 0.5*modb.ob;
+moda.MA = 0.5*moda.no_ob + 0.5*moda.ob;
+modb.PO = 0.5*0 + 0.5*(-modb.ob-15);
+moda.PO = 0.5*0 + 0.5*(+moda.ob-15);
+
+% compute params (alpha or beta) for models w/ unequal weighting
+modb.alpha = regress(modb.Y, [modb.ob - modb.no_ob]); modb.alpha1 = min(max(modb.alpha,0),1);
+moda.alpha = regress(moda.Y, [moda.ob - moda.no_ob]); moda.alpha1 = min(max(moda.alpha,0),1);
+modb.beta = regress(modb.Y, (-modb.ob-15)); modb.beta1 = min(max(modb.beta,0),1);
+moda.beta = regress(moda.Y, (+moda.ob-15)); moda.beta1 = min(max(moda.beta,0),1);
+
+% make models w/ unequal weighting (re-fits, and crossvalidating predictions)
+modb.rMA = (1-modb.alpha1)*modb.no_ob + (modb.alpha1)*modb.ob;
+moda.rMA = (1-moda.alpha1)*moda.no_ob + (moda.alpha1)*moda.ob;
+modb.rPO = (1-modb.beta1)*0 + (modb.beta1)*(-modb.ob-15); 
+moda.rPO = (1-moda.beta1)*0 + (moda.beta1)*(+moda.ob-15); 
+modb.rMAcv = (1-moda.alpha1)*modb.no_ob + (moda.alpha1)*modb.ob;  % cross-validation: expt 2a model param applied to expt 2b data
+moda.rMAcv = (1-modb.alpha1)*moda.no_ob + (modb.alpha1)*moda.ob;  % cross-validation: expt 2b model param applied to expt 2a data
+modb.rPOcv = (1-moda.beta1)*0 + (moda.beta1)*(-modb.ob-15);       % cross-validation: expt 2a model param applied to expt 2b data
+moda.rPOcv = (1-modb.beta1)*0 + (modb.beta1)*(+moda.ob-15);       % cross-validation: expt 2b model param applied to expt 2a data
+
+% compute RMS errors w/ 95%CI for all models
+e = modb.Y_ - modb.MA; modb.MA_rms = [rms(e), 1.96/sqrt(modb.N)*std(abs(e))];
+e = moda.Y_ - moda.MA; moda.MA_rms = [rms(e), 1.96/sqrt(modb.N)*std(abs(e))];
+e = modb.Y_ - modb.PO; modb.PO_rms = [rms(e), 1.96/sqrt(modb.N)*std(abs(e))];
+e = moda.Y_ - moda.PO; moda.PO_rms = [rms(e), 1.96/sqrt(modb.N)*std(abs(e))];
+
+e = modb.Y_ - modb.rMA; modb.rMA_rms = [rms(e), 1.96/sqrt(modb.N)*std(abs(e))];
+e = moda.Y_ - moda.rMA; moda.rMA_rms = [rms(e), 1.96/sqrt(modb.N)*std(abs(e))];
+e = modb.Y_ - modb.rPO; modb.rPO_rms = [rms(e), 1.96/sqrt(modb.N)*std(abs(e))];
+e = moda.Y_ - moda.rPO; moda.rPO_rms = [rms(e), 1.96/sqrt(modb.N)*std(abs(e))];
+
+e = modb.Y_ - modb.rMAcv; modb.rMAcv_rms = [rms(e), 1.96/sqrt(modb.N)*std(abs(e))];
+e = moda.Y_ - moda.rMAcv; moda.rMAcv_rms = [rms(e), 1.96/sqrt(modb.N)*std(abs(e))];
+e = modb.Y_ - modb.rPOcv; modb.rPOcv_rms = [rms(e), 1.96/sqrt(modb.N)*std(abs(e))];
+e = moda.Y_ - moda.rPOcv; moda.rPOcv_rms = [rms(e), 1.96/sqrt(moda.N)*std(abs(e))];
+
+disp('Results for expt2b data')
+modb
+disp('Results for expt2a data')
+moda
+
+function s = num2strFP(x, n)  %fixed point (FP) improvement on num2str
+extraZeros = -floor(log10(x))-1;
+s = num2str(x,['%0.',num2str(n+extraZeros),'f']);
+end
+
+function y = stats1(q)
+for k1=1:size(q,1), for k2=1:size(q,2), 
+        d=q{k1,k2}'; 
+        y.N(k1,k2)=length(d);  y.N1(k1,k2)=sum(isfinite(d)); 
+        y.M(k1,k2)=nanmean(d); y.Md(k1,k2)=nanmedian(d); 
+        y.S(k1,k2)=nanstd(d);  y.Sd(k1,k2)=nanstd(dtrend(d,11)); 
+        y.I(k1,k2)=iqr(d);     y.Id(k1,k2)=iqr(dtrend(d,11)); 
+    end; end
+end
+
+function y = stats2(q)
+for k1=1:size(q,1), 
+    for k2=1:size(q,2), 
+        d=q{k1,k2}'; 
+        y.N(k1,k2)=length(d);  y.N1(k1,k2)=sum(isfinite(d)); 
+        y.M(k1,k2)=nanmean(d); y.Md(k1,k2)=nanmedian(d); 
+        y.S(k1,k2)=nanstd(d);  y.Sd(k1,k2)=nanstd(dtrend(d,11)); 
+        y.I(k1,k2)=iqr(d);     y.Id(k1,k2)=iqr(dtrend(d,11));
+    end
+    if k2==4,
+        qt{k1,1} = [q{k1,1}, q{k1,2}];
+        qt{k1,2} = [q{k1,3}, q{k1,4}];
+        qt1{k1,1} = [q{k1,1}-nanmean(q{k1,1}), q{k1,2}-nanmean(q{k1,2})];
+        qt1{k1,2} = [q{k1,3}-nanmean(q{k1,3}), q{k1,4}-nanmean(q{k1,4})];
+    elseif k2==6,
+        qt{k1,1} = [q{k1,1}, q{k1,2}];
+        qt{k1,2} = [q{k1,4}, q{k1,5}];
+        qt1{k1,1} = [q{k1,1}-nanmean(q{k1,1}), q{k1,2}-nanmean(q{k1,2})];
+        qt1{k1,2} = [q{k1,4}-nanmean(q{k1,4}), q{k1,5}-nanmean(q{k1,5})];
+    end
+    
+    
+    for k2=1:size(qt,2),
+        d=qt{k1,k2}'; 
+        y.N1(k1,k2)=length(d);  y.N11(k1,k2)=sum(isfinite(d)); 
+        y.M1(k1,k2)=nanmean(d); y.Md1(k1,k2)=nanmedian(d); 
+        d1=qt1{k1,k2}'; 
+        y.S1(k1,k2)=nanstd(d1);  y.Sd1(k1,k2)=nanstd(dtrend(d1,11)); 
+        y.I1(k1,k2)=iqr(d1);     y.Id1(k1,k2)=iqr(dtrend(d1,11)); 
+    end
+end
+
+function y = dtrend(x,n)
+for k=1:size(x,2), y(:,k) = x(:,k)-smooth(x(:,k),n); end
+end
+end
+
+
+function [rc,pc,pd,B] = plotxy1(a,b,k)
+if nargin < 3, k=[]; end
+
+plot(a,b,'o'); hold on;
+[rc,pc] = corr(a,b); 
+[~,pd] = ttest(a,b);
+plot(mean(a),mean(b),'sr','linewidth',2,'markersize',10);  
+plot(median(a),median(b),'^r','linewidth',2,'markersize',10); 
+a1=min([a(:)]);
+a2=max([a(:)]);
+a1 = a1 - 0.05*(a2-a1);
+a2 = a2 + 0.05*(a2-a1);
+if length(k)>0, plot([a1 a2],k*[a1 a2],'--k'); end
+[B] = regress(b,[a,a*0+1]); plot([a1 a2],B(1)*[a1 a2]+B(2),'--b')
+end
+
+
+function y=nlin_mod3(params,ABC)
+[A,B,C] = deal(ABC(:,1),ABC(:,2),ABC(:,3));
+A_= A-mean(A);
+B_= B-mean(B);
+C_= C-mean(C);
+
+[KA,KB,KC,G,o] = deal(params(1),params(2),params(3),params(4),params(5));
+G=-mean(A)*mean(B)*mean(C);
+o=o-15;
+y = G*(1+KA*A_).*(1+KB*B_).*(1+KC*C_)+o;
+end
+
+function y=nlin_mod1(params,ABC)
+[A,B,C] = deal(ABC(:,1),ABC(:,2),ABC(:,3));
+A_= A-mean(A);
+B_= B-mean(B);
+C_= C-mean(C);
+
+[K,G,o] = deal(params(1),params(2),params(3),params(4),params(5));
+G=-mean(A)*mean(B)*mean(C);
+o=o-15;
+y = G*(1+K*A_).*(1+K*B_).*(1+K*C_)+o;
+end
+
+function y=nlin_mod2(params,ABC)
+[A,BC] = deal(ABC(:,1),ABC(:,2));
+[KA,KBC,G,o] = deal(params(1),params(2),params(3),params(4));
+y = G*(1+KA*A).*(1+KBC*BC)+o;
+end
+
+
+function y=lin_mod3(params,ABC)
+[A,B,C] = deal(ABC(:,1),ABC(:,2),ABC(:,3));
+[KA,KB,KC,o] = deal(params(1),params(2),params(3),params(4));
+y = KA*A + KB*B + KC*C + o;
+end
+
+function y=lin_mod2(params,ABC)
+[A,BC] = deal(ABC(:,1),ABC(:,2));
+[KA,KBC,o] = deal(params(1),params(2),params(3));
+y = KA*A + KBC*BC + o;
+end
